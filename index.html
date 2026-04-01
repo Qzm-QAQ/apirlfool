@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+  <title>GAGA-OS 安全警报</title>
+  <style>
+    :root {
+      --bg: #080a12;
+      --panel: #0f1424;
+      --panel-2: #151d34;
+      --line: rgba(124, 146, 255, 0.18);
+      --text: #e8ecff;
+      --muted: #9ba8d8;
+      --accent: #6ea8ff;
+      --accent-2: #8a6bff;
+      --danger: #ff5470;
+      --ok: #4ade80;
+      --warn: #ffb84d;
+      --shadow: 0 22px 60px rgba(0, 0, 0, 0.45);
+      --radius: 20px;
+    }
+
+    * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+    html, body {
+      margin: 0;
+      padding: 0;
+      min-height: 100%;
+      width: 100%;
+      background:
+        radial-gradient(circle at 20% 0%, rgba(110,168,255,0.13), transparent 30%),
+        radial-gradient(circle at 100% 10%, rgba(138,107,255,0.18), transparent 25%),
+        linear-gradient(180deg, #060810, #0a0f1a 50%, #090c15 100%);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
+      overflow-x: hidden;
+    }
+
+    .scanlines::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: repeating-linear-gradient(
+        to bottom,
+        rgba(255,255,255,0.03) 0px,
+        rgba(255,255,255,0.03) 1px,
+        transparent 2px,
+        transparent 4px
+      );
+      opacity: 0.18;
+      z-index: 0;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 18px 14px 24px;
+      position: relative;
+      z-index: 1;
+    }
+
+    .shell {
+      width: 100%;
+      max-width: 430px;
+      background: linear-gradient(180deg, rgba(18,24,42,0.95), rgba(12,16,28,0.98));
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+      position: relative;
+    }
+
+    .topbar {
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0));
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .dots { display: flex; gap: 6px; }
+    .dot {
+      width: 10px; height: 10px; border-radius: 50%;
+      background: rgba(255,255,255,0.16);
+    }
+    .dot.red { background: #ff5f57; }
+    .dot.yellow { background: #febc2e; }
+    .dot.green { background: #28c840; }
+
+    .content {
+      padding: 18px 16px 18px;
+    }
+
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(255,84,112,0.12);
+      color: #ff9eb1;
+      border: 1px solid rgba(255,84,112,0.25);
+      border-radius: 999px;
+      padding: 8px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 14px;
+    }
+
+    h1 {
+      font-size: 23px;
+      line-height: 1.3;
+      margin: 0 0 8px;
+      letter-spacing: 0.2px;
+    }
+
+    .sub {
+      color: var(--muted);
+      font-size: 14px;
+      line-height: 1.7;
+      margin: 0 0 16px;
+    }
+
+    .status-box {
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01));
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 12px 14px;
+      margin-bottom: 14px;
+    }
+
+    .status-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+
+    .progress {
+      height: 8px;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      overflow: hidden;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--accent), var(--accent-2));
+      transition: width 0.25s ease;
+      box-shadow: 0 0 20px rgba(110,168,255,0.4);
+    }
+
+    .terminal {
+      background: linear-gradient(180deg, #0b1020, #0b1020 60%, #0c1324);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 14px;
+      box-shadow: inset 0 0 0 1px rgba(255,255,255,0.015);
+    }
+
+    .question {
+      font-size: 17px;
+      font-weight: 800;
+      line-height: 1.6;
+      margin-bottom: 10px;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.6;
+      min-height: 38px;
+      margin-bottom: 12px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+    }
+
+    button {
+      border: none;
+      border-radius: 16px;
+      padding: 14px 12px;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 800;
+      cursor: pointer;
+      transition: transform 0.12s ease, opacity 0.12s ease, box-shadow 0.12s ease;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.24);
+    }
+
+    button:active { transform: scale(0.97); }
+
+    .option {
+      background: linear-gradient(180deg, rgba(110,168,255,0.12), rgba(255,255,255,0.04));
+      border: 1px solid rgba(110,168,255,0.14);
+      min-height: 76px;
+    }
+
+    .primary {
+      background: linear-gradient(135deg, var(--accent), var(--accent-2));
+      width: 100%;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .success {
+      display: none;
+      text-align: center;
+      padding-top: 6px;
+    }
+
+    .success .title {
+      font-size: 24px;
+      font-weight: 900;
+      margin-bottom: 10px;
+    }
+
+    .success .text {
+      color: #ced8ff;
+      font-size: 15px;
+      line-height: 1.8;
+      margin-bottom: 12px;
+    }
+
+    .ghost {
+      width: 100%;
+      background: linear-gradient(180deg, rgba(255,255,255,0.08), rgba(255,255,255,0.04));
+      border: 1px solid rgba(255,255,255,0.08);
+    }
+
+    .footer {
+      text-align: center;
+      padding-top: 12px;
+      color: rgba(155,168,216,0.55);
+      font-size: 12px;
+    }
+
+    .modal {
+      position: fixed;
+      inset: 0;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      background: rgba(2, 4, 10, 0.72);
+      z-index: 999;
+    }
+
+    .modal.show { display: flex; }
+
+    .pop {
+      width: min(92vw, 360px);
+      background: linear-gradient(180deg, #12192b, #0d1322);
+      border: 1px solid rgba(255,84,112,0.22);
+      border-radius: 22px;
+      box-shadow: 0 24px 60px rgba(0,0,0,0.42);
+      overflow: hidden;
+      animation: pop 0.16s ease;
+    }
+
+    @keyframes pop {
+      from { opacity: 0.5; transform: scale(0.95); }
+      to { opacity: 1; transform: scale(1); }
+    }
+
+    .pop-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+      background: linear-gradient(180deg, rgba(255,84,112,0.18), rgba(255,84,112,0.04));
+      border-bottom: 1px solid rgba(255,84,112,0.16);
+      font-size: 13px;
+      color: #ffc1cc;
+      font-weight: 800;
+    }
+
+    .pop-body {
+      padding: 16px 14px 14px;
+    }
+
+    .pop-title {
+      font-size: 19px;
+      font-weight: 900;
+      margin-bottom: 8px;
+    }
+
+    .pop-text {
+      color: #d4dcff;
+      font-size: 14px;
+      line-height: 1.7;
+      margin-bottom: 14px;
+      white-space: pre-line;
+    }
+
+    .pop-btn {
+      width: 100%;
+      background: linear-gradient(135deg, var(--danger), #ff7a59);
+    }
+
+    .flash {
+      animation: flash 0.35s ease;
+    }
+
+    @keyframes flash {
+      0% { box-shadow: 0 0 0 rgba(255,84,112,0); }
+      50% { box-shadow: 0 0 0 100vmax rgba(255,84,112,0.05); }
+      100% { box-shadow: 0 0 0 rgba(255,84,112,0); }
+    }
+
+    .confetti {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 1200;
+      overflow: hidden;
+    }
+
+    .piece {
+      position: absolute;
+      width: 10px;
+      height: 14px;
+      border-radius: 3px;
+      animation: fall linear forwards;
+      opacity: 0.9;
+    }
+
+    @keyframes fall {
+      from { transform: translateY(-12vh) rotate(0deg); }
+      to { transform: translateY(110vh) rotate(720deg); }
+    }
+  </style>
+</head>
+<body class="scanlines">
+  <div class="app">
+    <div class="shell" id="shell">
+      <div class="topbar">
+        <div class="dots">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <div>GAGA-OS / Threat Monitor</div>
+      </div>
+
+      <div class="content">
+        <div class="badge">⚠ 高危提示：检测到 嘎嘎 试图直接关闭恶作剧</div>
+        <h1>系统警报：<br>发现可疑目标 <span style="color:#9cc2ff;">嘎嘎代</span></h1>
+        <p class="sub">移动端已进入“愚人节安全模式”。<br>在完成验证前，系统将持续弹出友情警告。请勿慌张，也不要骂开发者。</p>
+
+        <div class="status-box">
+          <div class="status-row">
+            <span id="stageText">清除进度：第 1 / 3 关</span>
+            <span id="threatText">捣蛋值：99%</span>
+          </div>
+          <div class="progress">
+            <div class="progress-bar" id="progressBar"></div>
+          </div>
+        </div>
+
+        <div class="terminal">
+          <div class="question" id="question"></div>
+          <div class="hint" id="hint"></div>
+          <div class="grid" id="grid"></div>
+          <button class="primary" id="nextBtn">继续清除风险</button>
+
+          <div class="success" id="successBox">
+            <div class="title">病毒清除完成 ✅</div>
+            <div class="text" id="finalText"></div>
+            <button class="ghost" id="restartBtn">重新感染一下</button>
+          </div>
+        </div>
+
+        <div class="footer">可直接部署到 GitHub Pages · 单文件静态网页</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal" id="modal">
+    <div class="pop">
+      <div class="pop-head">
+        <span>Security Alert</span>
+        <span>×</span>
+      </div>
+      <div class="pop-body">
+        <div class="pop-title" id="modalTitle">警报</div>
+        <div class="pop-text" id="modalText"></div>
+        <button class="pop-btn" id="modalBtn">我认了，继续</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="confetti" id="confetti"></div>
+
+  <script>
+    const shell = document.getElementById('shell');
+    const stageText = document.getElementById('stageText');
+    const threatText = document.getElementById('threatText');
+    const progressBar = document.getElementById('progressBar');
+    const question = document.getElementById('question');
+    const hint = document.getElementById('hint');
+    const grid = document.getElementById('grid');
+    const nextBtn = document.getElementById('nextBtn');
+    const successBox = document.getElementById('successBox');
+    const restartBtn = document.getElementById('restartBtn');
+    const finalText = document.getElementById('finalText');
+    const modal = document.getElementById('modal');
+    const modalTitle = document.getElementById('modalTitle');
+    const modalText = document.getElementById('modalText');
+    const modalBtn = document.getElementById('modalBtn');
+    const confetti = document.getElementById('confetti');
+
+    let level = 0;
+    let introCount = 0;
+    let introTimer = null;
+
+    const levels = [
+      {
+        q: '第一层扫描：以下哪句话最像“嘎嘎代专属木马”？',
+        h: '请找出最离谱但最无害的一项。',
+        options: [
+          { text: '我明天要去竞选大阪市长', ok: true },
+          { text: '我刚喝了口水', ok: false, fail: '这不像木马，这像日常生存记录。' },
+          { text: '我现在有点困', ok: false, fail: '这个太真实，不够像恶作剧。' },
+          { text: '手机信号一般', ok: false, fail: '这更像运营商的问题。' }
+        ]
+      },
+      {
+        q: '第二层验证：哪种骗子最有可能被嘎嘎代勉强原谅？',
+        h: '提示：有一种属于娱乐型诈骗。',
+        options: [
+          { text: '骗她说带野猪回家的人', ok: true },
+          { text: '借钱不还的人', ok: false, fail: '这不是玩笑，这是进黑名单。' },
+          { text: '抢最后一口吃的的人', ok: false, fail: '这个级别已经接近不可饶恕。' },
+          { text: '说不困结果秒睡的人', ok: false, fail: '这个最多算嘴硬，不够坏。' }
+        ]
+      },
+      {
+        q: '最终解除：想停止弹窗，最正确的操作是？',
+        h: '请诚实面对自己的可爱处境。',
+        options: [
+          { text: '承认今天被骗得有点可爱', ok: true },
+          { text: '长按屏幕三分钟驱邪', ok: false, fail: '驱邪失败，手酸成功。' },
+          { text: '骂网页制作者两句', ok: false, fail: '作者心理脆弱，已提前躲好。' },
+          { text: '重启人生', ok: false, fail: '当前版本暂不支持此高级功能。' }
+        ]
+      }
+    ];
+
+    function openModal(title, text) {
+      modalTitle.textContent = title;
+      modalText.textContent = text;
+      modal.classList.add('show');
+      shell.classList.add('flash');
+      setTimeout(() => shell.classList.remove('flash'), 350);
+    }
+
+    function closeModal() {
+      modal.classList.remove('show');
+    }
+
+    modalBtn.addEventListener('click', () => {
+      closeModal();
+      if (introCount < 3) scheduleIntro();
+    });
+
+    function scheduleIntro() {
+      clearTimeout(introTimer);
+      introTimer = setTimeout(() => {
+        introCount += 1;
+        if (introCount === 1) {
+          openModal('高危弹窗 #1', '检测到目标“嘎嘎代”试图无视页面。\n该行为已被系统记录。\n请立刻接受愚人节检查。');
+        } else if (introCount === 2) {
+          openModal('高危弹窗 #2', '友情提醒：直接退出无效。\n本系统的脸皮和弹窗一样厚。');
+        } else if (introCount === 3) {
+          openModal('最终警告', '逃跑申请已被驳回。\n请完成小游戏，否则系统将持续觉得你很好骗。');
+        }
+      }, introCount === 0 ? 700 : 1100);
+    }
+
+    function setProgress() {
+      stageText.textContent = `清除进度：第 ${Math.min(level + 1, levels.length)} / ${levels.length} 关`;
+      const percent = Math.round((level / levels.length) * 100);
+      progressBar.style.width = percent + '%';
+      threatText.textContent = `捣蛋值：${Math.max(0, 99 - percent)}%`;
+    }
+
+    function renderLevel() {
+      const current = levels[level];
+      setProgress();
+      question.textContent = current.q;
+      hint.textContent = current.h;
+      grid.innerHTML = '';
+      nextBtn.style.display = 'none';
+      successBox.style.display = 'none';
+
+      current.options.forEach((opt) => {
+        const btn = document.createElement('button');
+        btn.className = 'option';
+        btn.textContent = opt.text;
+        btn.addEventListener('click', () => {
+          if (opt.ok) {
+            [...grid.children].forEach(x => x.disabled = true);
+            btn.style.outline = '2px solid rgba(74,222,128,0.5)';
+            btn.style.boxShadow = '0 0 0 1px rgba(74,222,128,0.18), 0 10px 24px rgba(0,0,0,0.24)';
+            hint.textContent = '验证通过。系统认为你还有救。';
+            nextBtn.style.display = 'block';
+          } else {
+            openModal('验证失败', opt.fail || '答案不对，请重新做人……重新作答。');
+          }
+        });
+        grid.appendChild(btn);
+      });
+    }
+
+    nextBtn.addEventListener('click', () => {
+      level += 1;
+      if (level < levels.length) {
+        renderLevel();
+      } else {
+        finishGame();
+      }
+    });
+
+    function finishGame() {
+      progressBar.style.width = '100%';
+      threatText.textContent = '捣蛋值：0%';
+      stageText.textContent = '清除进度：已完成';
+      question.textContent = '系统恢复正常';
+      hint.textContent = '弹窗权限已撤销。';
+      grid.innerHTML = '';
+      nextBtn.style.display = 'none';
+      successBox.style.display = 'block';
+      finalText.innerHTML = '恭喜你，嘎嘎代专属病毒已清除。<br><br>其实这一切只是想告诉你：<br><strong>愚人节快乐 😏</strong><br><br>顺便系统记录显示：<br>你今天被整到的样子，有点可爱。';
+      burstConfetti();
+    }
+
+    function burstConfetti() {
+      confetti.innerHTML = '';
+      const colors = ['#6ea8ff', '#8a6bff', '#4ade80', '#ff5470', '#ffb84d', '#c4b5fd'];
+      for (let i = 0; i < 46; i++) {
+        const p = document.createElement('div');
+        p.className = 'piece';
+        p.style.left = Math.random() * 100 + 'vw';
+        p.style.background = colors[Math.floor(Math.random() * colors.length)];
+        p.style.animationDuration = (2.2 + Math.random() * 1.8) + 's';
+        p.style.opacity = String(0.75 + Math.random() * 0.25);
+        confetti.appendChild(p);
+      }
+      setTimeout(() => confetti.innerHTML = '', 4200);
+    }
+
+    restartBtn.addEventListener('click', () => {
+      level = 0;
+      introCount = 0;
+      renderLevel();
+      scheduleIntro();
+    });
+
+    window.addEventListener('load', () => {
+      renderLevel();
+      scheduleIntro();
+    });
+
+    // GitHub Pages 可直接部署，无后端。
+    // 尝试拦一下返回键，移动端不同浏览器效果可能不同。
+    history.pushState({ prank: true }, '', location.href);
+    window.addEventListener('popstate', () => {
+      history.pushState({ prank: true }, '', location.href);
+      openModal('返回失败', '检测到你试图撤离现场。\n抱歉，愚人节系统暂不批准。');
+    });
+  </script>
+</body>
+</html>
